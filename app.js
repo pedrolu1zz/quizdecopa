@@ -3,8 +3,8 @@
   Para ranking global, configure SUPABASE_URL e SUPABASE_ANON_KEY.
   Nunca coloque a service_role key neste arquivo.
 */
-const SUPABASE_URL = '';
-const SUPABASE_ANON_KEY = '';
+const SUPABASE_URL = 'https://qlifkbebojuhgfpedovr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_oOdtV_auoiXc2Ji0HN_BBA_aOti_BzF';
 const RANKING_TABLE = 'ranking';
 let player='',questions=[],pos=0,total=0,attempt=0,locked=false;
 const $=id=>document.getElementById(id);

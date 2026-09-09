@@ -16,9 +16,161 @@ function render(){attempt=0;locked=false;const q=questions[pos];$('qcount').text
 function answer(i,btn){if(locked)return;const q=questions[pos];attempt++;if(i===q.c){const pts=5-attempt;total+=pts;locked=true;btn.style.borderColor='var(--green)';btn.style.background='#123a25';$('score').textContent=total;$('feedback').textContent=`✓ Acertou! +${pts} ponto${pts>1?'s':''}.`;$('feedback').classList.remove('hidden');showInfo(q);document.querySelectorAll('.option').forEach(b=>b.disabled=true);$('next').classList.remove('hidden')}else{btn.classList.add('wrong');btn.disabled=true;if(attempt<4){const pts=4-attempt;$('attempts').textContent=`Tentativa ${attempt+1} de 4 • se acertar agora vale ${pts} ponto${pts>1?'s':''}`;$('feedback').textContent='Você errou esta tentativa. A resposta correta continua escondida!';$('feedback').classList.remove('hidden')}else{locked=true;document.querySelectorAll('.option').forEach(b=>b.disabled=true);$('attempts').textContent='4 tentativas utilizadas';$('feedback').textContent='Você não acertou. A resposta correta continua escondida até o final.';$('feedback').classList.remove('hidden');$('next').classList.remove('hidden')}}}
 function showInfo(q){if(q.type==='scorer'||q.type==='team'){const title=q.type==='scorer'?'👤 Sobre o jogador':'🌎 Sobre a seleção';$('info').innerHTML=`<b>${title}</b><br>${safe(q.bio)}`;$('info').classList.remove('hidden')}}
 function next(){if(pos<19){pos++;render()}else finish()}
-async function finish(){show('result');$('hello').textContent=`Parabéns, ${player}!`;$('finalScore').textContent=`${total} / 80`;const lvl=total>=65?'Muito difícil':total>=45?'Difícil':total>=25?'Médio':'Fácil';$('finalLevel').innerHTML=`Nível de desempenho: <span class="pill">${lvl}</span>`;await saveScore();await renderRanking()}
+async function finish() {
+  show('result');
+
+  $('hello').textContent = `Parabéns, ${player}!`;
+  $('finalScore').textContent = `${total} / 80`;
+
+  let lvl =
+    total >= 65 ? 'Muito difícil' :
+    total >= 45 ? 'Difícil' :
+    total >= 25 ? 'Médio' : 'Fácil';
+
+  $('finalLevel').innerHTML =
+    `Nível de desempenho: <span class="pill">${lvl}</span>`;
+
+  await saveScore();
+  await renderRanking();
+}
 function localGet(){return JSON.parse(localStorage.getItem('copasRanking')||'[]')}
 function localSave(){const r=localGet();r.push({name:player,score:total,date:new Date().toLocaleDateString('pt-BR')});r.sort((a,b)=>b.score-a.score);localStorage.setItem('copasRanking',JSON.stringify(r.slice(0,100)))}
-async function saveScore(){localSave();if(!SUPABASE_URL||!SUPABASE_ANON_KEY)return;try{await fetch(`${SUPABASE_URL}/rest/v1/${RANKING_TABLE}`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${SUPABASE_ANON_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({name:player,score:total})})}catch(e){console.warn('Ranking online indisponível',e)}}
-async function renderRanking(){let r=localGet(),online=false;if(SUPABASE_URL&&SUPABASE_ANON_KEY){try{const res=await fetch(`${SUPABASE_URL}/rest/v1/${RANKING_TABLE}?select=name,score,created_at&order=score.desc,created_at.asc&limit=100`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${SUPABASE_ANON_KEY}`}});if(res.ok){r=await res.json();online=true}}catch(e){}}r=r.map((x,i)=>({name:x.name,score:x.score,date:x.created_at?new Date(x.created_at).toLocaleDateString('pt-BR'):x.date||''}));let html=`<h3>🏅 Ranking ${online?'GLOBAL':'LOCAL'}</h3><table><tr><th>#</th><th>Jogador</th><th>Pontos</th><th>Data</th></tr>`;r.slice(0,100).forEach((p,i)=>{const me=p.name===player&&Number(p.score)===total;html+=`<tr class="${me?'me':''}"><td>${i+1}</td><td>${safe(p.name)}</td><td>${p.score}</td><td>${safe(p.date)}</td></tr>`});html+='</table>';if(!r.length)html+='<p class="hint">Ainda não há jogadores no ranking.</p>'; $('rankBox').innerHTML=html}
+async function saveScore() {
+  localSave();
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/${RANKING_TABLE}`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          name: player,
+          score: total
+        })
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+  } catch (error) {
+    console.error('Erro ao salvar ranking:', error);
+  }
+}
+async function renderRanking() {
+  const box = $('ranking');
+
+  box.innerHTML = `
+    <h2>🌎 Ranking Mundial</h2>
+    <p class="small">Carregando ranking...</p>
+  `;
+
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/${RANKING_TABLE}?select=name,score,created_at&order=score.desc,created_at.asc&limit=1000`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const partidas = await response.json();
+    const melhores = new Map();
+
+    // Guarda somente a melhor pontuação de cada nome
+    partidas.forEach(p => {
+      const nome = String(p.name || '').trim();
+      const chave = nome.toLowerCase();
+
+      if (
+        !melhores.has(chave) ||
+        Number(p.score) > Number(melhores.get(chave).score)
+      ) {
+        melhores.set(chave, {
+          name: nome,
+          score: Number(p.score),
+          created_at: p.created_at
+        });
+      }
+    });
+
+    const ranking = [...melhores.values()].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(a.created_at) - new Date(b.created_at);
+    });
+
+    const top10 = ranking.slice(0, 10);
+
+    const minhaPosicao =
+      ranking.findIndex(
+        p => p.name.toLowerCase() === player.toLowerCase()
+      ) + 1;
+
+    const recorde = ranking.length ? ranking[0].score : 0;
+
+    let html = `
+      <h2>🌎 Ranking Mundial — Top 10</h2>
+
+      <p>🏆 Recorde: <strong>${recorde} pontos</strong></p>
+      <p>👥 Jogadores: <strong>${ranking.length}</strong></p>
+      <p>📍 Sua posição: <strong>${minhaPosicao ? `${minhaPosicao}º` : '-'}</strong></p>
+
+      <table>
+        <tr>
+          <th>#</th>
+          <th>Jogador</th>
+          <th>Pontos</th>
+        </tr>
+    `;
+
+    top10.forEach((p, i) => {
+      let posicao = `${i + 1}º`;
+
+      if (i === 0) posicao = '🥇';
+      if (i === 1) posicao = '🥈';
+      if (i === 2) posicao = '🥉';
+
+      const souEu =
+        p.name.toLowerCase() === player.toLowerCase();
+
+      html += `
+        <tr class="${souEu ? 'me' : ''}">
+          <td>${posicao}</td>
+          <td>${safe(p.name)}</td>
+          <td><strong>${p.score}</strong></td>
+        </tr>
+      `;
+    });
+
+    html += `
+      </table>
+      <p class="small center">
+        🌎 Ranking compartilhado entre todos os jogadores.
+      </p>
+    `;
+
+    box.innerHTML = html;
+
+  } catch (error) {
+    console.error('Erro no ranking mundial:', error);
+
+    box.innerHTML = `
+      <h2>🌎 Ranking Mundial</h2>
+      <p>Não foi possível carregar o ranking.</p>
+    `;
+  }
+}
 $('start').onclick=startGame;$('name').addEventListener('keydown',e=>{if(e.key==='Enter')startGame()});$('next').onclick=next;$('again').onclick=()=>{$('name').value=player;show('home')};$('clear').onclick=()=>{if(confirm('Apagar o ranking salvo neste navegador?')){localStorage.removeItem('copasRanking');renderRanking()}};

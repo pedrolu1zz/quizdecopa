@@ -66,7 +66,7 @@ async function saveScore() {
   }
 }
 async function renderRanking() {
-  const box = $('rankbox');
+  const box = $('rankBox');
 
   box.innerHTML = `
     <h2>🌎 Ranking Mundial</h2>
